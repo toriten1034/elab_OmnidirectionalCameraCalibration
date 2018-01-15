@@ -147,6 +147,84 @@ void yMap2(cv::Mat src,cv::Mat dst){
   }
 }
 
+void xMap3(cv::Mat src,cv::Mat dst){
+  int width = src.cols;
+  int dist_width  = dst.cols;
+  int height = src.rows;
+  for(int y = 0; y < height; y++){
+    for(int x = 0; x < dist_width; x++){
+      double py = y - (height / 2);
+      double px = x - (dist_width / 2);
+      // 0 < theta  < 2
+      //spherical coordinate
+      double theta = (px/((double)dist_width/2)) *(M_PI/2);
+      double phi =  (py/((double)height/2)) * (M_PI / 2);
+
+      //point on orthogonal projection
+      double d_x = sin(theta/2)*cos(phi)*(dist_width/2);
+      double d_y = sin(phi)*(height/2);
+      
+      double r = sqrt(pow(d_x,2)+pow(d_y,2));
+      double r_angle = asin(r/(height/2));
+      //correct by focal length
+      double f = ((918.75/1080/2)/sin(r_angle/2)/2);
+      double fr = sin(r_angle);
+
+      double rate = fr/r;
+
+      double c_x = d_x*rate;
+      double c_y = d_y*rate;
+
+      unsigned short real_x = (int) ((dist_width / 2) +  d_x );
+      if(real_x > dst.cols ){
+	std::cout << "width error" << std::endl;
+      }
+      dst.ptr< unsigned short >(y)[x] = real_x ;
+      if(phi > (M_PI/2) && theta > (M_PI/2) ){
+	std::cout << "range error" << std::endl;
+      }
+    }
+  }
+}
+
+
+void yMap3(cv::Mat src,cv::Mat dst){
+  int width = src.cols;
+  int dist_width  = dst.cols;
+  int height = src.rows;
+  for(int y = 0; y < height; y++){
+    for(int x = 0; x < dist_width; x++){
+      double py = y - (height / 2);
+      double px = x - (dist_width / 2);
+      
+      //spherical coordinate
+      double theta = (px/((double)dist_width/2)) *(M_PI/2);
+      double phi =  (py/((double)height/2)) * (M_PI / 2);
+
+      //point on orthogonal projection
+      double d_x = sin(theta/2)*cos(phi)*(dist_width/2);
+      double d_y = sin(phi)*(height/2);
+      
+      double r = sqrt(pow(d_x,2)+pow(d_y,2));
+      double r_angle = asin(r/(height/2));
+      //correct by focal length
+      double f = ((918.75/1080/2)/sin(r_angle/2)/2);
+      double fr = sin(r_angle);
+
+      double rate = fr/r;
+
+      double c_x = d_x*rate;
+      double c_y = d_y*rate;
+      
+      unsigned short real_y = (int) ((height / 2) +  d_y ) ;
+      if(phi > (M_PI/2) && theta > (M_PI/2) ){
+	std::cout << "range error" << std::endl;
+      }
+      dst.ptr< unsigned short >(y)[x] = real_y ;
+    }
+  }
+}
+
 
 void omniremap(cv::Mat src, cv::Mat dst, cv::Mat xmap, cv::Mat ymap){
   int src_width = src.cols;
