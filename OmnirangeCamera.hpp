@@ -2,7 +2,7 @@
 #include <opencv2/core/utility.hpp>
 #include <opencv2/core/core.hpp>
 
-namespace FishEyeRemapper{
+namespace OmnirangeCamera{
   #define ORTHOGRAPHIC  0
   #define STEREOGRAPHIC 1
   #define EQUISOLID     2
@@ -16,7 +16,7 @@ namespace FishEyeRemapper{
    *   y_map :output : y remapper
    *   mode  :input  : select lens type
    ****************************************************/
-  void FishEyeRemapperGen(const cv::Rect src,cv::Mat x_map,cv::Mat y_map ,int mode){
+  void OmnirangeCameraRemapperGen(const cv::Rect src,cv::Mat x_map,cv::Mat y_map ,int mode){
     int width = src.width;
     int dist_width  = x_map.cols;
     int height = src.height;
@@ -68,7 +68,7 @@ namespace FishEyeRemapper{
    *xmap: input : xmap
    *ymap: input : ymap
    *********************************************/
-  void FishEyeImageRemap(cv::Mat src, cv::Mat dst, cv::Mat xmap, cv::Mat ymap){
+  void OmnirangeImageRemap(cv::Mat src, cv::Mat dst, cv::Mat xmap, cv::Mat ymap){
     int src_width = src.cols;
     int dst_width = dst.cols;
     if(xmap.cols != dst.cols || xmap.rows != dst.rows){
@@ -89,7 +89,7 @@ namespace FishEyeRemapper{
     }
   }
   
-  void ImgJoin(cv::Mat right, cv::Mat left, cv::Mat src ,int diff){
+  void OmnirangeImgJoin(cv::Mat right, cv::Mat left, cv::Mat src ,int diff){
     int width = src.cols/2;
     int height = src.rows;
     for(int i = 0; i < height; i++){
