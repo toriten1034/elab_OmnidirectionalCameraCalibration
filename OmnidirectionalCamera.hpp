@@ -43,12 +43,13 @@ namespace OmnidirectionalCamera{
     if(!(0 <= view_angle and view_angle < 360)){
       CV_Error(cv::Error::StsOutOfRange, "angle is out of range, it must set between 0~360 ");      
     }
-    if(!(0 <= view_angle and view_angle < 1800) && mode == ORTHOGRAPHIC){
+    if(!(0 <= view_angle and view_angle < 180) && mode == ORTHOGRAPHIC){
      CV_Error(cv::Error::StsOutOfRange, "angle is out of range, when use ORTHOGRAPHIC, it must set between 0~180 ");     
     }
 
     double angle_rate = (double)view_angle / 180.0;  
     double radian_angle = M_PI*angle_rate;
+    
     int width = src.width;
     int dist_width  = x_map.cols;
     int height = src.height;
@@ -60,10 +61,19 @@ namespace OmnidirectionalCamera{
 	//angles
 	double theta = (px/((double)dist_width/2)) *(radian_angle/2);
 	double phi =  (py/((double)height/2)) * (radian_angle / 2);
+
+	double tmp = M_PI;
+	if( theta/angle_rate < -M_PI/2  ||   M_PI/2 < theta/angle_rate){
+	  std::cout << "theta range error" << std::endl;	  
+	}
+
+	if(phi/angle_rate < -M_PI/2 || M_PI/2 <  phi/angle_rate ){
+	  std::cout << "phi range error" << std::endl;	  
+	}
 	
 	//point on orthogonal projection
-	double d_x = sin(theta)*cos(phi)*(dist_width/2);
-	double d_y = sin(phi)*(height/2);
+	double d_x = sin(theta/angle_rate)*cos(phi/angle_rate)*(dist_width/2);
+	double d_y = sin(phi/angle_rate)*(height/2);
 	    
 	double r = sqrt(pow(d_x,2)+pow(d_y,2));
 	
@@ -73,8 +83,8 @@ namespace OmnidirectionalCamera{
 	matrix::rot_x(Vec0,VecX,theta);
 	double VecY[3];
 	matrix::rot_y(VecX,VecY,phi);
-	double r_angle = asin(r/(height/2));
-	//double r_angle = matrix::inner(Vec0,VecY); 
+	//double r_angle = asin(r/(height/2));
+	double r_angle = matrix::inner(Vec0,VecY); 
 	//correct by focal length
 	// double f = (height/height/2)/sin(r_angle)/2;
 	double fr;
@@ -92,6 +102,7 @@ namespace OmnidirectionalCamera{
 	  fr = r_angle/radian_angle;
 	  break;
 	}
+	fr = fr / angle_rate;
 	double rate = fr/(r/(height/2));
 	
 	double c_x = d_x*rate;
