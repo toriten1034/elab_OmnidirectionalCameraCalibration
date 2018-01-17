@@ -31,16 +31,23 @@ void ImgDiv(cv::Mat src, cv::Mat right, cv::Mat left){
   }
 }
 
-void ImgJoin(cv::Mat right, cv::Mat left, cv::Mat src, int hdiff){
+void ImgJoin(cv::Mat right, cv::Mat left, cv::Mat src, int hdiff,int wclip){
   int width = src.cols/2;
   int height = src.rows;
   for(int y = 0; y < height - hdiff; y++){
     cv::Vec3b *p_src   = src.ptr<cv::Vec3b>(y);
     cv::Vec3b *p_right = right.ptr<cv::Vec3b>(y+((hdiff < 25)? hdiff : 0 ));
     cv::Vec3b *p_left  = left.ptr<cv::Vec3b>(y+((hdiff > 25)? hdiff : 0));
-    for(int x = 0; x < width; x++){
+    for(int x = wclip; x < width ; x++){
       p_src[x] = p_left[x];
       p_src[x + width] = p_right[x];
+    }
+  }
+  
+  for(int y = 1; y < height - hdiff -1; y++){
+    cv::Vec3b *p_src   = src.ptr<cv::Vec3b>(y);
+       if(p_src[width][1] < 15 || p_src[width][1] < 15 || p_src[width][1]<15){
+      p_src[width] = p_src[width-1];
     }
   }
 }
@@ -121,6 +128,9 @@ void xMap2(cv::Rect src,cv::Mat dst){
 	std::cout << "range error" << std::endl;
       }
     }
+  }
+  for(int y = 0; y < height; y++){
+    
   }
 }
 
@@ -233,8 +243,13 @@ int main(int argc , char* argv[]){
   }
 
   int cam_id = std::atoi(argv[1]); 
-  int clip = 0;
-  int hdiff = 0;
+  int clip = 47;
+  int hdiff = 5;
+  int focus = 1;
+  int mode =  OmnidirectionalCamera::EQUISOLID;
+  int wclip = 0;
+  int gammma = 1;/*0-20 to 0.0-2.0*/
+
   std::cout << "s to capture" << std::endl;
   std::cout << "ESC s to Exit Program" << std::endl;
 
@@ -253,6 +268,7 @@ int main(int argc , char* argv[]){
   int clip_t = 0;;
   int hdiff_t = 0;
   while(1){
+
     if(key == 49){
       if(0 < clip ){
 	clip--;
@@ -260,18 +276,22 @@ int main(int argc , char* argv[]){
     }else if (key == 50){
       if(0 < 1000 ){
 	clip++;
-   }
+      }
+    }else if(key == 51){
+      mode = mode + 1;
+      mode = mode % 4;
+      std::cout << "mode is "<< mode << std::endl;
     }else if(key == 27){
       break;
     }
-    std::cout << "clip range is " << clip <<std:: endl;
+    std::cout << "clip range i " << clip << std::endl;
+    std::cout << "key is "<< key << std::endl;
     roi = cv::Rect(clip,clip,src.cols/2 - (2*clip) ,src.rows - (2*clip) );
-   
+        
     cv::Mat y_mat(roi.width, roi.height,CV_16UC1);
     cv::Mat x_mat(roi.width, roi.height,CV_16UC1);
-    OmnidirectionalCamera::OmnirangeCameraRemapperGen(roi, x_map, y_map , OmnidirectionalCamera::ORTHOGRAPHIC);
-      xMap3(roi,x_mat); 
-    yMap3(roi,y_mat); 
+    
+    OmnidirectionalCamera::OmnidirectionalCameraRemapperGen(roi, x_mat, y_mat , mode);
 
     while(1){  
             
@@ -293,21 +313,23 @@ int main(int argc , char* argv[]){
       OmnidirectionalCamera::OmnidirectionalImageRemap(cliped_r, result_right,x_mat,y_mat);
       OmnidirectionalCamera::OmnidirectionalImageRemap(cliped_l, result_left,x_mat,y_mat);
       
-      cv::Mat Join( result_right.rows -hdiff,result_right.cols*2,result_right.type());
-      ImgJoin(result_right,result_left,Join ,hdiff);
+      cv::Mat Join( result_right.rows -hdiff,result_right.cols*2 - (2*wclip),result_right.type());
+      ImgJoin(result_right,result_left,Join ,hdiff,wclip);
       cv::imshow(WinName,Join);
       cv::createTrackbar("Clip",WinName,&clip,50);
       cv::createTrackbar("Height diff",WinName,&hdiff,50);
+      cv::createTrackbar("wclip",WinName,&wclip,50);
+ 
       key = cv::waitKey(1);
       
       // if input any key 
       if(key != 255 || clip_t != clip){
+
 	clip_t = clip;
 	hdiff_t = hdiff;
 	break;
       }
     }
-   
   }
-
 }
+
