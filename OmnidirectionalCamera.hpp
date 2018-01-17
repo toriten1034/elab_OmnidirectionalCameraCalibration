@@ -7,7 +7,25 @@ namespace OmnidirectionalCamera{
   const int  STEREOGRAPHIC = 1; //stereographic 
   const int  EQUISOLID     = 2; //equisolid  e.g insta360 Air
   const int  EQUIDISTANT   = 3; //equidistant fisheye
-  
+
+  /*matrix functions for OmnidirectionalCameraRemapperGen*/
+  namespace matrix{
+    void rot_x(double src[3],double dst[3], double angle){
+      dst[0] = src[0] +       0           +  0;
+      dst[1] =    0   + src[1]*cos(angle) -  src[2]*sin(angle);
+      dst[2] =    0   + src[1]*sin(angle) +  src[2]*cos(angle);
+    }
+    
+    void rot_y(double src[3],double dst[3], double angle){
+      dst[0] = src[0]*cos(angle)  +   0    +  src[2]*sin(angle);
+      dst[1] =         0          + src[1] +        0;
+      dst[2] = -src[0]*sin(angle) +   0    +  src[2]*cos(angle);
+    }
+    
+    double inner(double a[3], double b[3]){
+      return  acos((a[0]*b[0] +  a[1]*b[1] +  a[2]*b[2]) / (sqrt( pow(a[0],2) + pow(a[1],2) + pow(a[2],2)) * sqrt( pow(a[0],2) + pow(a[1],2) + pow(a[2],2) ) ));
+    }
+  }
   /****************************************************
    *This function generate fish eye image remapper,You 
     can select fish eye lens type by mode argment
@@ -17,7 +35,7 @@ namespace OmnidirectionalCamera{
    *   y_map :output : y remapper
    *   mode  :input  : select lens type
    *   angle :input  : angle of view 0 to 360
-   ****************************************************/
+   ****************************************************/  
   void OmnidirectionalCameraRemapperGen(const cv::Rect src,cv::Mat x_map,cv::Mat y_map ,int mode,int view_angle){
     if(x_map.cols != y_map.cols || x_map.cols != y_map.cols){
       CV_Error(cv::Error::StsBadSize, "map size is not same");
@@ -29,8 +47,8 @@ namespace OmnidirectionalCamera{
      CV_Error(cv::Error::StsOutOfRange, "angle is out of range, when use ORTHOGRAPHIC, it must set between 0~180 ");     
     }
 
-    double radian_angle = M_PI*((double)view_angle / 180.0);
-      
+    double angle_rate = (double)view_angle / 180.0;  
+    double radian_angle = M_PI*angle_rate;
     int width = src.width;
     int dist_width  = x_map.cols;
     int height = src.height;
@@ -39,17 +57,24 @@ namespace OmnidirectionalCamera{
         //Point on dst image
 	double py = y - (height / 2);
 	double px = x - (dist_width / 2);
-	
+	//angles
 	double theta = (px/((double)dist_width/2)) *(radian_angle/2);
 	double phi =  (py/((double)height/2)) * (radian_angle / 2);
 	
 	//point on orthogonal projection
 	double d_x = sin(theta)*cos(phi)*(dist_width/2);
 	double d_y = sin(phi)*(height/2);
-	
+	    
 	double r = sqrt(pow(d_x,2)+pow(d_y,2));
-	double r_angle = asin(r/(height/2));
 	
+
+	double Vec0[3] = {0,0,1.0};
+	double VecX[3];
+	matrix::rot_x(Vec0,VecX,theta);
+	double VecY[3];
+	matrix::rot_y(VecX,VecY,phi);
+	double r_angle = asin(r/(height/2));
+	//double r_angle = matrix::inner(Vec0,VecY); 
 	//correct by focal length
 	// double f = (height/height/2)/sin(r_angle)/2;
 	double fr;
@@ -90,7 +115,7 @@ namespace OmnidirectionalCamera{
   }
   
   /**********************************************
-   *This Function FishEyeImage to panoramaImage
+   *This Function OmnidirectionalImage to panoramaImage
    *src : input :input FishEye Image
    *dst : output: Output remapped Image;
    *x_map: input : xmap
@@ -117,18 +142,30 @@ namespace OmnidirectionalCamera{
       }
     }
   }
+
+  /**********************************************
+   *This Function Join 2 remmaped omnidirectional 
+   * Image smooth
+   *side_A : input :input remmaped a side Image
+   *side_B : input :input remmaped other sideI mage 
+   *dst : output: Output remapped Image;
+   *x_map: input : xmap
+   *y_map: input : ym
+   *********************************************/
   
-  void OmnidirectionalImgJoin(cv::Mat right, cv::Mat left, cv::Mat src ,int diff){
-    int width = src.cols/2;
-    int height = src.rows;
+  
+  void OmnidirectionalImgJoin(cv::Mat side_A, cv::Mat side_B, cv::Mat dst ,int h_diff,int blend_width){
+    int width = dst.cols/2;
+    int height = dst.rows;
     for(int i = 0; i < height; i++){
-      cv::Vec3b *p_src   = src.ptr<cv::Vec3b>(i);
-      cv::Vec3b *p_right = right.ptr<cv::Vec3b>(i);
-      cv::Vec3b *p_left  = left.ptr<cv::Vec3b>(i);
+      cv::Vec3b *p_dst   = dst.ptr<cv::Vec3b>(i);
+      cv::Vec3b *p_side_A = side_A.ptr<cv::Vec3b>(i);
+      cv::Vec3b *p_side_B = side_B.ptr<cv::Vec3b>(i);
       for(int j = 0; j < width; j++){
-      p_src[j] = p_left[j];
-      p_src[j + width] = p_right[j] ;
+      p_dst[j] = p_side_A[j];
+      p_dst[j + width] = p_side_B[j] ;
       }
     }
   }
 }
+
