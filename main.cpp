@@ -61,7 +61,7 @@ int main(int argc , char* argv[]){
   int hdiff = 5;
   int focus = 1;
   int mode =  OmnidirectionalCamera::EQUISOLID;
-  int wclip = 0;
+  int blend_width = 0;
   int gammma = 1;/*0-20 to 0.0-2.0*/
 
   std::cout << "s to capture" << std::endl;
@@ -126,12 +126,12 @@ int main(int argc , char* argv[]){
       OmnidirectionalCamera::OmnidirectionalImageRemap(cliped_r, result_right,x_mat,y_mat);
       OmnidirectionalCamera::OmnidirectionalImageRemap(cliped_l, result_left,x_mat,y_mat);
       
-      cv::Mat Join( result_right.rows -hdiff,result_right.cols*2 - (2*wclip),result_right.type());
-      OmnidirectionalCamera::OmnidirectionalImgJoin(result_right,result_left,Join ,hdiff,5);
+      cv::Mat Join( result_right.rows -hdiff,(result_right.cols - blend_width)*2,result_right.type());
+      OmnidirectionalCamera::OmnidirectionalImgJoin(result_right,result_left,Join ,hdiff,blend_width);
       cv::imshow(WinName,Join);
       cv::createTrackbar("Clip",WinName,&clip,50);
       cv::createTrackbar("Height diff",WinName,&hdiff,50);
-      cv::createTrackbar("wclip",WinName,&wclip,50);
+      cv::createTrackbar("blend width",WinName,&blend_width,50);
  
       key = cv::waitKey(1);
       

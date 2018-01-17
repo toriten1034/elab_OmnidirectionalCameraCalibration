@@ -102,7 +102,9 @@ namespace OmnidirectionalCamera{
 	  fr = r_angle/radian_angle;
 	  break;
 	}
+	//fit to image width
 	fr = fr / angle_rate;
+	
 	double rate = fr/(r/(height/2));
 	
 	double c_x = d_x*rate;
@@ -166,15 +168,34 @@ namespace OmnidirectionalCamera{
   
   
   void OmnidirectionalImgJoin(cv::Mat side_A, cv::Mat side_B, cv::Mat dst ,int h_diff,int blend_width){
-    int width = dst.cols/2;
-    int height = dst.rows;
-    for(int i = 0; i < height; i++){
+    
+    int input_width = side_A.cols;
+    int dst_width = dst.cols;
+    int height = side_A.rows;
+    std::vector< double > blend_map; 
+
+    for(int i = blend_width - 1 ; i >= 0; i--){
+      blend_map.push_back(((double)i/blend_width));
+    }
+    
+    for(int i = 0; i < height-h_diff; i++){
       cv::Vec3b *p_dst   = dst.ptr<cv::Vec3b>(i);
       cv::Vec3b *p_side_A = side_A.ptr<cv::Vec3b>(i);
-      cv::Vec3b *p_side_B = side_B.ptr<cv::Vec3b>(i);
-      for(int j = 0; j < width; j++){
-      p_dst[j] = p_side_A[j];
-      p_dst[j + width] = p_side_B[j] ;
+      cv::Vec3b *p_side_B = side_B.ptr<cv::Vec3b>(i + h_diff);
+      for(int j = 0 ; j  < ( (dst_width/2)- blend_width); j++ ){
+	p_dst[j] = p_side_A[j + blend_width];
+	p_dst[j + (dst_width/2)] = p_side_B[j + blend_width];
+      }
+      for(int j = ( (dst_width/2)- blend_width); j < (dst_width/2); j++){
+	p_dst[j][0] = (int)( (double)p_side_A[j + blend_width][0] * blend_map[j - ( (dst_width/2)- blend_width)]  + (double)p_side_B[j - ( (dst_width/2)- blend_width)][0] * (1-blend_map[j - ( (dst_width/2)- blend_width)]) );
+	p_dst[j][1] = (int)( (double)p_side_A[j + blend_width][1] * blend_map[j - ( (dst_width/2)- blend_width)]  + (double)p_side_B[j - ( (dst_width/2)- blend_width)][1] * (1-blend_map[j - ( (dst_width/2)- blend_width)]));
+	p_dst[j][2] = (int)( (double)p_side_A[j + blend_width][2] * blend_map[j - ( (dst_width/2)- blend_width)]  + (double)p_side_B[j - ( (dst_width/2)- blend_width)][2] * (1-blend_map[j - ( (dst_width/2)- blend_width)]));
+
+	p_dst[j + (dst_width/2)][0] = (int)( (double)p_side_B[j + blend_width][0] * blend_map[j - ( (dst_width/2)- blend_width)]  + (double)p_side_A[j - ( (dst_width/2)- blend_width)][0] * (1-blend_map[j - ( (dst_width/2)- blend_width)]) );
+	p_dst[j + (dst_width/2)][1] = (int)( (double)p_side_B[j + blend_width][1] * blend_map[j - ( (dst_width/2)- blend_width)]  + (double)p_side_A[j - ( (dst_width/2)- blend_width)][1] * (1-blend_map[j - ( (dst_width/2)- blend_width)]));
+	p_dst[j + (dst_width/2)][2] = (int)( (double)p_side_B[j + blend_width][2] * blend_map[j - ( (dst_width/2)- blend_width)]  + (double)p_side_A[j - ( (dst_width/2)- blend_width)][2] * (1-blend_map[j - ( (dst_width/2)- blend_width)]));
+
+	//	p_dst[j + (dst_width/2)] = p_side_B[j + blend_width];
       }
     }
   }
