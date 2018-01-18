@@ -57,11 +57,10 @@ int main(int argc , char* argv[]){
   }
 
   int cam_id = std::atoi(argv[1]); 
-  int clip = 47;
-  int hdiff = 5;
-  int focus = 1;
+  int clip = 40;
+  int hdiff = 10;
   int mode =  OmnidirectionalCamera::EQUISOLID;
-  int blend_width = 0;
+  int blend_width = 13;
   int gammma = 1;/*0-20 to 0.0-2.0*/
 
   std::cout << "s to capture" << std::endl;
@@ -104,7 +103,7 @@ int main(int argc , char* argv[]){
         
     cv::Mat y_mat(roi.width, roi.height,CV_16UC1);
     cv::Mat x_mat(roi.width, roi.height,CV_16UC1);
-    OmnidirectionalCamera::OmnidirectionalCameraRemapperGen(roi, x_mat, y_mat , mode , 185);
+    OmnidirectionalCamera::OmnidirectionalCameraRemapperGen(roi, x_mat, y_mat , mode , 183);
 
     while(1){  
             
