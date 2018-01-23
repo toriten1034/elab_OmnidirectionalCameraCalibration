@@ -68,6 +68,9 @@ int main(int argc , char* argv[]){
 
   //set camera configration
   cv::VideoCapture insta360(cam_id);
+  cv::VideoWriter streaming;
+  streaming.open("appsrc ! autovideoconvert ! v4l2video1h264enc extra-controls=\"encode,h264_level=10,h264_profile=4,frame_level_rate_control_enable=1,video_bitrate=2000000\" ! h264parse ! rtph264pay config-interval=1 pt=96 ! udpsink host=192.168.x.x port=5000 sync=false", 0, 30, cv::Size(2048, 1024 ), true);
+  
   insta360.set(CV_CAP_PROP_FRAME_WIDTH, 1920);
   insta360.set( CV_CAP_PROP_FRAME_HEIGHT, 1080);  
   
