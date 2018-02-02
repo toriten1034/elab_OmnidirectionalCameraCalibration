@@ -69,7 +69,13 @@ int main(int argc , char* argv[]){
   //set camera configration
   cv::VideoCapture insta360(cam_id);
   cv::VideoWriter streaming;
-  streaming.open("appsrc ! autovideoconvert ! v4l2video1h264enc extra-controls=\"encode,h264_level=10,h264_profile=4,frame_level_rate_control_enable=1,video_bitrate=2000000\" ! h264parse ! rtph264pay config-interval=1 pt=96 ! udpsink host=192.168.x.x port=5000 sync=false", 0, 30, cv::Size(2048, 1024 ), true);
+  streaming.open("appsrc ! videoconvert ! x264enc tune=zerolatency byte-stream=True bitrate=8192 key-int-max=1  threads = 1   ! h264parse ! rtph264pay config-interval=5 pt=96 ! udpsink host=192.168.100.119 port=5678",  0, 30, cv::Size(2048, 1024 ), true);
+
+  if (!streaming.isOpened()) {
+    printf("=ERR= can't create capture\n");
+    return -1;
+  }
+
   
   insta360.set(CV_CAP_PROP_FRAME_WIDTH, 1920);
   insta360.set( CV_CAP_PROP_FRAME_HEIGHT, 1080);  
@@ -108,6 +114,8 @@ int main(int argc , char* argv[]){
     cv::Mat x_mat(roi.width, roi.height,CV_16UC1);
     OmnidirectionalCamera::OmnidirectionalCameraRemapperGen(roi, x_mat, y_mat , mode , 183);
 
+    cv::Mat send(2048,1024,CV_8UC3);
+
     while(1){  
             
       //fetch image
@@ -130,16 +138,20 @@ int main(int argc , char* argv[]){
       
       cv::Mat Join( result_right.rows -hdiff,(result_right.cols - blend_width)*2,result_right.type());
       OmnidirectionalCamera::OmnidirectionalImgJoin(result_right,result_left,Join ,hdiff,blend_width);
-      cv::imshow(WinName,Join);
+      /*****streaming***********/
+      cv::resize(Join,send,cv::Size(2048,1024), cv::INTER_CUBIC);
+      streaming.write(send);
+
+      /****display***********/
+      cv::imshow(WinName,send);
       cv::createTrackbar("Clip",WinName,&clip,50);
       cv::createTrackbar("Height diff",WinName,&hdiff,50);
       cv::createTrackbar("blend width",WinName,&blend_width,50);
- 
+
       key = cv::waitKey(1);
       
       // if input any key 
       if(key != 255 || clip_t != clip){
-
 	clip_t = clip;
 	hdiff_t = hdiff;
 	break;
