@@ -1,6 +1,7 @@
 #include <cmath>
 #include <opencv2/core/utility.hpp>
 #include <opencv2/core/core.hpp>
+#include<omp.h>
 
 namespace OmnidirectionalCamera{
   const int  ORTHOGRAPHIC  = 0; //orthographic 
@@ -137,21 +138,24 @@ namespace OmnidirectionalCamera{
   void OmnidirectionalImageRemap(cv::Mat src, cv::Mat dst, cv::Mat x_map, cv::Mat y_map){
     int src_width = src.cols;
     int dst_width = dst.cols;
-    
+
     if(x_map.cols != dst.cols || x_map.rows != dst.rows||y_map.cols != dst.cols || y_map.rows != dst.rows){
       CV_Error(cv::Error::StsBadSize, "map size is not same");
     }
+
     
     int height = x_map.rows;
     cv::Vec3b *p_src = src.ptr<cv::Vec3b>(0);      
-    
+    cv::Vec3b *p_dst = dst.ptr<cv::Vec3b>(0);
+    unsigned short *p_x_map  = x_map.ptr<unsigned short>(0);
+    unsigned short *p_y_map  = y_map.ptr<unsigned short>(0);
+
+    //#pragma omp parallel for
     for(int y = 0 ; y < height; y++){
-      cv::Vec3b *p_dst = dst.ptr<cv::Vec3b>(y);
-      unsigned short *p_x_map  = x_map.ptr<unsigned short>(y);
-      unsigned short *p_y_map  = y_map.ptr<unsigned short>(y);
+      //#pragma omp parallel for
       for(int x = 0 ; x < dst_width; x++){
-	int index = p_y_map[x] * src_width + p_x_map[x];
-	p_dst[x] = p_src[index];
+	int index = p_y_map[y*dst_width + x] * src_width + p_x_map[y*dst_width + x];
+	p_dst[y*dst_width + x] = p_src[index];
       }
     }
   }
@@ -167,35 +171,35 @@ namespace OmnidirectionalCamera{
    *********************************************/
   
   
-  void OmnidirectionalImgJoin(cv::Mat side_A, cv::Mat side_B, cv::Mat dst ,int h_diff,int blend_width){
+  void OmnidirectionalImgJoin(cv::Mat side_A, cv::Mat side_B, cv::Mat dst ,int h_diff,int blend_width, std::vector< double >& blend_map){
     
     int input_width = side_A.cols;
     int dst_width = dst.cols;
     int height = side_A.rows;
-    std::vector< double > blend_map; 
-
-    for(int i = blend_width - 1 ; i >= 0; i--){
-      blend_map.push_back(((double)i/blend_width));
-    }
-    
+    #pragma omp parallel for
     for(int i = 0; i < height-h_diff; i++){
       cv::Vec3b *p_dst   = dst.ptr<cv::Vec3b>(i);
       cv::Vec3b *p_side_A = side_A.ptr<cv::Vec3b>(i);
       cv::Vec3b *p_side_B = side_B.ptr<cv::Vec3b>(i + h_diff);
+      #pragma omp parallel for
       for(int j = 0 ; j  < ( (dst_width/2)- blend_width); j++ ){
 	p_dst[j] = p_side_A[j + blend_width];
 	p_dst[j + (dst_width/2)] = p_side_B[j + blend_width];
       }
+      #pragma omp parallel for
       for(int j = ( (dst_width/2)- blend_width); j < (dst_width/2); j++){
-	p_dst[j][0] = (int)( (double)p_side_A[j + blend_width][0] * blend_map[j - ( (dst_width/2)- blend_width)]  + (double)p_side_B[j - ( (dst_width/2)- blend_width)][0] * (1-blend_map[j - ( (dst_width/2)- blend_width)]) );
-	p_dst[j][1] = (int)( (double)p_side_A[j + blend_width][1] * blend_map[j - ( (dst_width/2)- blend_width)]  + (double)p_side_B[j - ( (dst_width/2)- blend_width)][1] * (1-blend_map[j - ( (dst_width/2)- blend_width)]));
-	p_dst[j][2] = (int)( (double)p_side_A[j + blend_width][2] * blend_map[j - ( (dst_width/2)- blend_width)]  + (double)p_side_B[j - ( (dst_width/2)- blend_width)][2] * (1-blend_map[j - ( (dst_width/2)- blend_width)]));
+	int Aindex = j - ( (dst_width/2)- blend_width);
+	int Bindex = j - ( (dst_width/2)- blend_width);
+
+	
+	p_dst[j][0] = (int)( (double)p_side_A[j + blend_width][0] * blend_map[Aindex]  + (double)p_side_B[Bindex][0] * (1-blend_map[j - ( (dst_width/2)- blend_width)]) );
+	p_dst[j][1] = (int)( (double)p_side_A[j + blend_width][1] * blend_map[Aindex]  + (double)p_side_B[Bindex][1] * (1-blend_map[j - ( (dst_width/2)- blend_width)]));
+	p_dst[j][2] = (int)( (double)p_side_A[j + blend_width][2] * blend_map[Aindex]  + (double)p_side_B[Bindex][2] * (1-blend_map[j - ( (dst_width/2)- blend_width)]));
 
 	p_dst[j + (dst_width/2)][0] = (int)( (double)p_side_B[j + blend_width][0] * blend_map[j - ( (dst_width/2)- blend_width)]  + (double)p_side_A[j - ( (dst_width/2)- blend_width)][0] * (1-blend_map[j - ( (dst_width/2)- blend_width)]) );
 	p_dst[j + (dst_width/2)][1] = (int)( (double)p_side_B[j + blend_width][1] * blend_map[j - ( (dst_width/2)- blend_width)]  + (double)p_side_A[j - ( (dst_width/2)- blend_width)][1] * (1-blend_map[j - ( (dst_width/2)- blend_width)]));
 	p_dst[j + (dst_width/2)][2] = (int)( (double)p_side_B[j + blend_width][2] * blend_map[j - ( (dst_width/2)- blend_width)]  + (double)p_side_A[j - ( (dst_width/2)- blend_width)][2] * (1-blend_map[j - ( (dst_width/2)- blend_width)]));
 
-	//	p_dst[j + (dst_width/2)] = p_side_B[j + blend_width];
       }
     }
   }
