@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <vector>
 #include <cmath>
+#include <thread>
+#include <boost/lockfree/queue.hpp>
 #include <opencv2/core/utility.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -12,47 +14,13 @@
 #include "opencv2/calib3d/calib3d.hpp"
 #include <opencv2/stitching.hpp>
 #include "OmnidirectionalCamera.hpp"
-#include<omp.h>
+#include <omp.h>
 #include <time.h>
+
 
 int HorizonalCrossCount = 9;
 int VerticalCrossCount = 6;
 
-//dvide image
-void ImgDiv(cv::Mat src, cv::Mat right, cv::Mat left ){
-  int width = right.cols;
-  int height = right.rows;
-  
-  cv::Vec3b *p_right = right.ptr<cv::Vec3b>(0);
-  cv::Vec3b *p_left  = left.ptr<cv::Vec3b>(0);
-#pragma omp parallel for
-  for(int y = 0 ; y < height; y++){
-    cv::Vec3b *p_src   = src.ptr<cv::Vec3b>(y);
-    #pragma omp parallel for
-    for(int x = 0 ; x < width; x++){
-      p_left[(width*y) +  x] = p_src[ x];
-      p_right[(width*y) +  x] = p_src[x+ width];
-    }
-  }
-}
-
-
-
-void ImgClip(cv::Mat src, cv::Mat dst,cv::Rect range){
-  int width = range.width;
-  int height = range.height;
-  int offset_x = range.x;
-  int offset_y = range.y;
-  cv::Vec3b *p_dst = dst.ptr<cv::Vec3b>(0);
-#pragma omp parallel for
-  for(int i = 0; i < height; i++){
-    cv::Vec3b *p_src   = src.ptr<cv::Vec3b>(i+offset_y);
-    #pragma omp parallel for
-    for(int j = 0; j < width; j++){
-      p_dst[i*width + j] = p_src[j+ offset_x];
-    }
-  }
-}
 
 void ImgDivAndClip(cv::Mat src, cv::Mat right, cv::Mat left ,cv::Rect range ){
   int src_width  = src.cols/2;
@@ -76,39 +44,8 @@ void ImgDivAndClip(cv::Mat src, cv::Mat right, cv::Mat left ,cv::Rect range ){
 
 }
 
-// cv::parallel_for_利用コード
-class TestParallelLoopBody : public cv::ParallelLoopBody
-{
-private:
-  cv::Mat &_src;
-  cv::Mat &_dst;
-  cv::Mat &_x_map;
-  cv::Mat &_y_map;
 
-public:
-  TestParallelLoopBody
-  (
-   cv::Mat &src, cv::Mat &dst, cv::Mat &x_map, cv::Mat &y_map
-   )
-    : _src(src), _dst(dst), _x_map(x_map), _y_map(y_map) { }
-  
-  void operator() (const cv::Range& range) const
-  {
-    int row0 = range.start;
-    int row1 = range.end;
-    cv::Mat dstStripe = _dst.rowRange(row0, row1);
-    cv::Mat x_mapStripe = _x_map.rowRange(row0, row1);
-    cv::Mat y_mapStripe = _y_map.rowRange(row0, row1);
-    
-    //my_threshold(srcStripe, dstStripe, _thresh, _max_value);
-    OmnidirectionalCamera::OmnidirectionalImageRemap( _src, dstStripe,  x_mapStripe, y_mapStripe);
-  }
-};
-
-
-
-
-
+int MainLockfree(cv::VideoCapture& Camera, cv::VideoWriter& stream);
 
 int main(int argc , char* argv[]){
   double f = 1000.0f / cv::getTickFrequency();
@@ -135,24 +72,30 @@ int main(int argc , char* argv[]){
   //set camera configration
   cv::VideoCapture insta360(cam_id);
   cv::VideoWriter streaming;
-  
-  //streaming.open("appsrc ! videoconvert ! x264enc tune=zerolatency byte-stream=True bitrate=32768 key-int-max=1  threads = 1   ! h264parse ! rtph264pay config-interval=5 pt=96 ! udpsink host=192.168.100.119 port=5678",  0, 30, cv::Size(3008, 1504 ), true);
-  streaming.open("appsrc ! videoconvert n-threads = 4 ! x264enc tune=zerolatency byte-stream=True bitrate=15000 key-int-max=1  threads = 1  sliced-threads=true ! h264parse ! rtph264pay config-interval=10 pt=96 ! udpsink host=192.168.100.119 port=5678",  0, 30, cv::Size(2048, 1024 ), true);
 
+  //streaming.open("appsrc ! videoconvert ! x264enc tune=zerolatency byte-stream=True bitrate=32768 key-int-max=1  threads = 1   ! h264parse ! rtph264pay config-interval=5 pt=96 ! udpsink host=192.168.100.119 port=5678",  0, 30, cv::Size(3008, 1504 ), true);
+   streaming.open("appsrc ! videoconvert n-threads = 4 ! vaapih264enc tune=zerolatency byte-stream=True bitrate=15000 key-int-max=1  threads = 1  sliced-threads=true ! h264parse ! rtph264pay config-interval=10 pt=96 ! udpsink host=192.168.100.119 port=5678",  0, 30, cv::Size(2048, 1024 ), true);
+
+  //  streaming.open("appsrc !  videoconvert   ! autovideosink",  0, 30, cv::Size(2048, 1024 ), true);
+
+  
   if (!streaming.isOpened()) {
     printf("=ERR= can't create capture\n");
     return -1;
   }
 
+  //  MainLockfree(insta360 , streaming);
+
+      
   
   // insta360.set(CV_CAP_PROP_FRAME_WIDTH, 2048);
   // insta360.set( CV_CAP_PROP_FRAME_HEIGHT, 1024);
-  insta360.set(CV_CAP_PROP_FPS, 60); 
+  //insta360.set(CV_CAP_PROP_FPS, 60); 
 
   cv::Mat tmp;
-  insta360 >> tmp;
+  insta360.read(tmp);
   cv::Mat src(tmp.cols,tmp.rows,tmp.type());
-  insta360 >> src;
+  insta360.read(src);
   cv::Rect roi = cv::Rect(clip,clip,src.cols/2 - (2*clip) ,src.rows - (2*clip) );
 
   const std::string WinName = "Joind";
@@ -196,7 +139,7 @@ int main(int argc , char* argv[]){
     //    cv::Mat send(3008,1504,CV_8UC3);
     cv::Mat send(2048,1024,CV_8UC3);
 
-    insta360 >> src;
+    insta360.read(src);
 
     std::vector< double > blend_map;
     for(int i = blend_width - 1 ; i >= 0; i--){
@@ -209,12 +152,10 @@ int main(int argc , char* argv[]){
     while(1){  
       int64 start = cv::getTickCount();
       //fetch image
-      insta360 >> src;
-
+      insta360.read(src);
       cv::Mat cliped_r(roi.width, roi.height,src.type());
       cv::Mat cliped_l(roi.width, roi.height,src.type());
       
-
       ImgDivAndClip(src,cliped_r,cliped_l,roi);
       
       cv::Mat result_right(x_mat_s.rows, x_mat_s.cols, src.type());
@@ -253,6 +194,74 @@ int main(int argc , char* argv[]){
       }
     }
   }
+}
+
+/*
+int MainLockfree(cv::VideoCapture& Camera, cv::VideoWriter& stream){
+  using std::thread;
+  using boost::lockfree::queue;
+  queue<cv::Mat*> src_que(2);
+  queue<cv::Mat*> dst_que(2);
+
+  double f = 1000.0f / cv::getTickFrequency();
+  
+  auto source_th = thread([&]{
+      int64 start = 0;
+      int64 end = 0;
+
+      while(true){
+	cv::Mat* src = new cv::Mat{};
+	if(Camera.read(*src)){
+	  while(!src_que.push(src)){ "retry"; };
+	  end = cv::getTickCount();
+	  std::cout << "my_threshold(parallel_for_): "  << (end - start) * f << "[ms]" << std::endl;
+	  start = end;
+
+	}else{
+	  delete src;
+	  while(!src_que.push(nullptr)){ "retry"; }
+        break;
+	}
+      }
+    });
+  
+  auto serial_th = thread{[&](){
+      while(true){
+
+	cv::Mat* src = nullptr;
+	while(!src_que.pop(src)){"retry";}
+	if(src != nullptr){
+	  cv::Mat *dst = new cv::Mat{};
+	  cv::Mat tmp;
+	  cv::cvtColor(*src, tmp, cv::COLOR_RGB2GRAY);
+	  cv::cvtColor(tmp, *dst, cv::COLOR_GRAY2RGB);
+	  cv::resize(*dst,*dst,cv::Size(2048,1024), 0);
+     	  delete src;
+	  while(!dst_que.push(dst)){ "retry"; }
+	}else{
+	  while(!dst_que.push(nullptr)){"retry";}
+	  break;
+	}	
+      }
+    }};
+
+  auto sink_th = thread{[&](){
+    while(true){
+      cv::Mat *dst = nullptr;
+      while(!dst_que.pop(dst)){"retry";}
+      if(dst != nullptr){
+	stream.write(*dst);
+	delete dst;
+      }else{
+	break;
+      }
+    }
+    }};
+  source_th.join();
+  serial_th.join();
+  sink_th.join();
+  return EXIT_SUCCESS;
 
 }
 
+*/
