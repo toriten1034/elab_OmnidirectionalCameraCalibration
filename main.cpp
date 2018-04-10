@@ -19,6 +19,7 @@
 #include <opencv2/core/cuda.hpp>
 #include "opencv2/cudawarping.hpp"
 #include <opencv2/cudaimgproc.hpp>
+#include <opencv2/cudaarithm.hpp>
 //shared memory
 #include <sys/ipc.h>
 #include <sys/shm.h>
@@ -94,13 +95,13 @@ int main(int argc , char* argv[]){
   cv::VideoWriter streaming;
 
   char gstreamerCommand[200];
-  sprintf(gstreamerCommand,"appsrc ! videoconvert ! x264enc tune=zerolatency byte-stream=True bitrate=15000 key-int-max=1 threads = 1 ! h264parse ! rtph264pay config-interval=10 pt=96 ! udpsink host=%s port=5678",ipAddress.c_str());
-  streaming.open(gstreamerCommand, 0, 30, cv::Size(2048, 1024 ), true);
-
+  // sprintf(gstreamerCommand,"appsrc ! videoconvert ! x264enc tune=zerolatency byte-stream=True bitrate=15000 key-int-max=1 threads = 1 ! h264parse ! rtph264pay config-interval=10 pt=96 ! udpsink host=%s port=5678",ipAddress.c_str());
+  // streaming.open(gstreamerCommand, 0, 30, cv::Size(2048, 1024 ), true);
+  /*
   if (!streaming.isOpened()) {
     printf("=ERR= can't create capture\n");
     return -1;
-  }
+    }*/
   
   insta360.set(CV_CAP_PROP_FRAME_WIDTH, 2048);
   insta360.set( CV_CAP_PROP_FRAME_HEIGHT, 1024);
@@ -146,10 +147,10 @@ int main(int argc , char* argv[]){
     std::cout << "key is "<< key << std::endl;
     roi = cv::Rect(clip,clip,src.cols/2 - (2*clip) ,src.rows - (2*clip) );
         
-    cv::Mat yMap(roi.width, roi.height,CV_32FC1);
-    cv::Mat xMap(roi.width, roi.height,CV_32FC1);
+    cv::Mat yMap( roi.height/2,roi.width,CV_32FC1);
+    cv::Mat xMap( roi.height/2,roi.width,CV_32FC1);
 
-    OmnidirectionalCamera::OmnidirectionalCameraGpuRemapperGen(roi, xMap, yMap,  mode , 183);
+    OmnidirectionalCamera::BirdsEyeViewRemapperGen(roi, xMap, yMap,  mode,180);
     
     cv::cuda::GpuMat d_xMap(xMap.size(), xMap.type());
     cv::cuda::GpuMat d_yMap(xMap.size(), yMap.type());
@@ -158,7 +159,7 @@ int main(int argc , char* argv[]){
     d_yMap.upload( yMap );
 
     //    cv::Mat send(3008,1504,CV_8UC3);
-    cv::Mat send(2048,1024,CV_8UC3);
+    cv::Mat send(roi.width,roi.height,CV_8UC3);
 
     insta360.read(src);
 
@@ -186,16 +187,27 @@ int main(int argc , char* argv[]){
       cv::cuda::remap(d_clipedRight , d_resultRight, d_xMap, d_yMap ,cv::INTER_LINEAR );
       cv::cuda::remap(d_clipedLeft  , d_resultLeft, d_xMap, d_yMap ,cv::INTER_LINEAR );
 
-      cv::cuda::GpuMat d_Join(d_resultRight.rows -vdiff, (d_resultRight.cols - blendWidth)*2, d_resultRight.type());
-      OmnidirectionalCamera::cuda::Join(d_resultRight,d_resultLeft,d_Join ,vdiff ,blendWidth );
 
-      cv::cuda::GpuMat d_send(send);
+      cv::Mat resultRight;
+      cv::Mat resultLeft;
+
+      d_resultRight.download(resultRight);
+      d_resultLeft.download(resultLeft);
+
+
+      // cv::cuda::GpuMat d_Join(d_resultRight.rows -vdiff, (d_resultRight.cols - blendWidth)*2, d_resultRight.type());
+      // OmnidirectionalCamera::cuda::Join(d_right_flip,d_left_flip,d_Join ,vdiff ,blendWidth );
+
+      OmnidirectionalCamera::StitchSideBySide(resultRight, resultLeft, send, vdiff, blendWidth);
+      
+      // cv::cuda::GpuMat d_send(send);
      
       //*****streaming***********
-      cv::cuda::resize(d_Join,d_send,cv::Size(2048,1024), 0);
-      d_send.download(send);
+      //cv::cuda::resize(d_Join,d_send,cv::Size(1024,512), -1);, cv::Size(), 0.5, 0.5
+      //cv::cuda::resize(d_Join,d_send, cv::Size(), 0.5, 0.5);
+      //d_send.download(send);
      
-      streaming.write(send);
+      //streaming.write(send);
    
       //****display***********
       cv::imshow(WinName,send);
