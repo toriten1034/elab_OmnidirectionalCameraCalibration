@@ -160,7 +160,6 @@ int main(int argc , char* argv[]){
 
     //    cv::Mat send(3008,1504,CV_8UC3);
     cv::Mat send(roi.width,roi.height,CV_8UC3);
-
     insta360.read(src);
 
     int64 cnt = 0;
@@ -198,8 +197,11 @@ int main(int argc , char* argv[]){
       // cv::cuda::GpuMat d_Join(d_resultRight.rows -vdiff, (d_resultRight.cols - blendWidth)*2, d_resultRight.type());
       // OmnidirectionalCamera::cuda::Join(d_right_flip,d_left_flip,d_Join ,vdiff ,blendWidth );
 
-      OmnidirectionalCamera::StitchSideBySide(resultRight, resultLeft, send, vdiff, blendWidth);
-      
+
+      cv::Mat Joind(roi.width-vdiff,(resultRight.rows*2)-(blendWidth*2),CV_8UC3);
+      OmnidirectionalCamera::StitchSideBySide(resultRight, resultLeft, Joind, vdiff, blendWidth);
+      cv::resize(Joind,send, cv::Size(), 0.5, 0.5);
+
       // cv::cuda::GpuMat d_send(send);
      
       //*****streaming***********
