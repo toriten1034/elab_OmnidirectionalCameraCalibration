@@ -32,12 +32,10 @@ int MainLockfree(cv::VideoCapture& Camera, cv::VideoWriter& stream);
 int main(int argc , char* argv[]){
   double f = 1000.0f / cv::getTickFrequency();
 
-
   if(argc <= 2 || argc % 2 == 0){
     std::cout << "too few argments" << std::endl;
     return -1;
   }
-
   
   int cam_id = 0;
   int sharedMemoryKey = -1; // -1 is shared memory disable
@@ -45,7 +43,6 @@ int main(int argc , char* argv[]){
   int clip = 28; //clip range 
   int vdiff = 6; //vertical diffarence offset
   int blendWidth = 51; //alpha blend width to stitting
-
 
   // initialize by option
   for(int i = 1; i < argc ; i+=2){
@@ -95,13 +92,6 @@ int main(int argc , char* argv[]){
   cv::VideoWriter streaming;
 
   char gstreamerCommand[200];
-  // sprintf(gstreamerCommand,"appsrc ! videoconvert ! x264enc tune=zerolatency byte-stream=True bitrate=15000 key-int-max=1 threads = 1 ! h264parse ! rtph264pay config-interval=10 pt=96 ! udpsink host=%s port=5678",ipAddress.c_str());
-  // streaming.open(gstreamerCommand, 0, 30, cv::Size(2048, 1024 ), true);
-  /*
-  if (!streaming.isOpened()) {
-    printf("=ERR= can't create capture\n");
-    return -1;
-    }*/
   
   insta360.set(CV_CAP_PROP_FRAME_WIDTH, 2048);
   insta360.set( CV_CAP_PROP_FRAME_HEIGHT, 1024);
@@ -178,38 +168,22 @@ int main(int argc , char* argv[]){
       cv::cuda::GpuMat d_clipedLeft(roi.width, roi.height,src.type());
 
       OmnidirectionalCamera::cuda::DivAndClip(d_src ,d_clipedRight, d_clipedLeft,roi);
-      
-
+	
       cv::cuda::GpuMat d_resultRight(xMap.rows, xMap.cols, src.type());
       cv::cuda::GpuMat d_resultLeft(xMap.rows, xMap.cols, src.type());
 
       cv::cuda::remap(d_clipedRight , d_resultRight, d_xMap, d_yMap ,cv::INTER_LINEAR );
       cv::cuda::remap(d_clipedLeft  , d_resultLeft, d_xMap, d_yMap ,cv::INTER_LINEAR );
-
-
+      
       cv::Mat resultRight;
       cv::Mat resultLeft;
 
       d_resultRight.download(resultRight);
       d_resultLeft.download(resultLeft);
 
-
-      // cv::cuda::GpuMat d_Join(d_resultRight.rows -vdiff, (d_resultRight.cols - blendWidth)*2, d_resultRight.type());
-      // OmnidirectionalCamera::cuda::Join(d_right_flip,d_left_flip,d_Join ,vdiff ,blendWidth );
-
-
       cv::Mat Joind(roi.width-vdiff,(resultRight.rows*2)-(blendWidth*2),CV_8UC3);
-      OmnidirectionalCamera::StitchSideBySide(resultRight, resultLeft, Joind, vdiff, blendWidth);
+      OmnidirectionalCamera::SideBySideStitch(resultRight, resultLeft, Joind, vdiff, blendWidth);
       cv::resize(Joind,send, cv::Size(), 0.5, 0.5);
-
-      // cv::cuda::GpuMat d_send(send);
-     
-      //*****streaming***********
-      //cv::cuda::resize(d_Join,d_send,cv::Size(1024,512), -1);, cv::Size(), 0.5, 0.5
-      //cv::cuda::resize(d_Join,d_send, cv::Size(), 0.5, 0.5);
-      //d_send.download(send);
-     
-      //streaming.write(send);
    
       //****display***********
       cv::imshow(WinName,send);
