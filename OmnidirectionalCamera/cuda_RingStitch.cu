@@ -5,7 +5,7 @@
 #include <device_launch_parameters.h>
 
 /*******************************
-* cuda_Join_kernel
+* cuda_RingStitch_kernel
 *	arguments
 * 	right : input  data pointer (GlobPtrSz)
 *	left  : input  data pointer (GlobPtrSz)
@@ -13,7 +13,7 @@
 *	vdiff : vertical diffarence offset (int)
 *	blendWidth : alpha blend area width to stiting (int)
 *******************************/
-__global__ void cuda_Join_kernel( const cv::cudev::GlobPtrSz<uchar> right ,const cv::cudev::GlobPtrSz<uchar> left , cv::cudev::GlobPtrSz<uchar> dst, int vdiff, int blendWidth){
+__global__ void cuda_RingStitch_kernel( const cv::cudev::GlobPtrSz<uchar> right ,const cv::cudev::GlobPtrSz<uchar> left , cv::cudev::GlobPtrSz<uchar> dst, int vdiff, int blendWidth){
     const int x = blockDim.x * blockIdx.x + threadIdx.x;
     const int y = blockDim.y * blockIdx.y + threadIdx.y;
    
@@ -46,7 +46,7 @@ __global__ void cuda_Join_kernel( const cv::cudev::GlobPtrSz<uchar> right ,const
 }
 
 /*******************************
-* cuda_Join
+* cuda_RingStitch
 *	arguments
 * 	right : input  data pointer (GpuMat)
 *	left  : input  data pointer (GpuMat)
@@ -54,7 +54,7 @@ __global__ void cuda_Join_kernel( const cv::cudev::GlobPtrSz<uchar> right ,const
 *	vdiff : vertical diffarence offset (int)
 *	blendWidth : alpha blend area width to stiting (int)
 *******************************/
-void  OmnidirectionalCamera::cuda::Join(cv::cuda::GpuMat &right, cv::cuda::GpuMat &left, cv::cuda::GpuMat &dst , int vdiff, int blendWidth){
+void  OmnidirectionalCamera::cuda::RingStitch(cv::cuda::GpuMat &right, cv::cuda::GpuMat &left, cv::cuda::GpuMat &dst , int vdiff, int blendWidth){
 
     //create image pointer
     cv::cudev::GlobPtrSz<uchar> p_Right = cv::cudev::globPtr(right.ptr<uchar>(), right.step, right.rows, right.cols * right.channels());
@@ -64,9 +64,10 @@ void  OmnidirectionalCamera::cuda::Join(cv::cuda::GpuMat &right, cv::cuda::GpuMa
     const dim3 block(32, 32);
     const dim3 grid(cv::cudev::divUp(dst.cols, block.x), cv::cudev::divUp(dst.rows , block.y));
 
-    cuda_Join_kernel<<<grid, block>>>( p_Right, p_Left, p_Dst , vdiff, blendWidth);
+    cuda_RingStitch_kernel<<<grid, block>>>( p_Right, p_Left, p_Dst , vdiff, blendWidth);
 
     CV_CUDEV_SAFE_CALL(cudaGetLastError());
     CV_CUDEV_SAFE_CALL(cudaDeviceSynchronize());
 
 }
+

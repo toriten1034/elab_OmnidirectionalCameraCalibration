@@ -13,7 +13,6 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include "opencv2/calib3d/calib3d.hpp"
 #include <opencv2/stitching.hpp>
-#include "OmnidirectionalCamera.hpp"
 #include <omp.h>
 #include <time.h>
 #include <opencv2/core/cuda.hpp>
@@ -24,7 +23,8 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
-#include "OmnidirectionalCamera.cuh"
+#include "../../include/OmnidirectionalCamera.hpp"
+#include "../../include/OmnidirectionalCamera.cuh"
 
 
 int MainLockfree(cv::VideoCapture& Camera, cv::VideoWriter& stream);
@@ -168,23 +168,21 @@ int main(int argc , char* argv[]){
       cv::cuda::GpuMat d_clipedLeft(roi.width, roi.height,src.type());
 
       OmnidirectionalCamera::cuda::DivAndClip(d_src ,d_clipedRight, d_clipedLeft,roi);
-	
+      
       cv::cuda::GpuMat d_resultRight(xMap.rows, xMap.cols, src.type());
       cv::cuda::GpuMat d_resultLeft(xMap.rows, xMap.cols, src.type());
 
       cv::cuda::remap(d_clipedRight , d_resultRight, d_xMap, d_yMap ,cv::INTER_LINEAR );
       cv::cuda::remap(d_clipedLeft  , d_resultLeft, d_xMap, d_yMap ,cv::INTER_LINEAR );
       
-      cv::Mat resultRight;
-      cv::Mat resultLeft;
+      cv::cuda::GpuMat d_Joind(roi.width-vdiff,(d_resultRight.rows*2)-(blendWidth*2),CV_8UC3);
+      cv::Mat Joind(roi.width-vdiff,(d_resultRight.rows*2)-(blendWidth*2),CV_8UC3);
+      
+      OmnidirectionalCamera::cuda::SideBySideStitch(d_resultRight, d_resultLeft, d_Joind, vdiff, blendWidth);
 
-      d_resultRight.download(resultRight);
-      d_resultLeft.download(resultLeft);
-
-      cv::Mat Joind(roi.width-vdiff,(resultRight.rows*2)-(blendWidth*2),CV_8UC3);
-      OmnidirectionalCamera::SideBySideStitch(resultRight, resultLeft, Joind, vdiff, blendWidth);
+      d_Joind.download(Joind);
       cv::resize(Joind,send, cv::Size(), 0.5, 0.5);
-   
+      
       //****display***********
       cv::imshow(WinName,send);
       cv::createTrackbar("Clip",WinName,&clip,70);
@@ -210,7 +208,7 @@ int main(int argc , char* argv[]){
 	  break;
 	}
       }
-      
+    
     }
   }
 }
